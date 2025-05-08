@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Maps on ESP32 by Phong</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      #map { height: 100vh; width: 100%; }
+      #info { 
+        position: absolute; 
+        top: 10px; left: 10px; 
+        background: white; 
+        padding: 10px; 
+        border-radius: 8px; 
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
+        z-index: 1;
+        font-family: Arial, sans-serif;
+      }
+    </style>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDyWTi89DsYMZNJeNQ8M8xpmlGOFRFchZg"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <script>
+      // Cấu hình MQTT
+      const mqttHost = 'd2aa02aedbf34bef80d67bcc4e63f070.s1.eu.hivemq.cloud';
+      const mqttPort = 8884; // Cổng WebSocket TLS
+      const mqttTopic = 'esp32/map/data';
+      const mqttClientId = 'Web_Client_' + Math.random().toString(16).slice(3);
+
+      const client = new Paho.MQTT.Client(mqttHost, mqttPort, mqttClientId);
+
+      client.onConnectionLost = () => {
+        console.log('MQTT connection lost');
+        document.getElementById('info').innerHTML = 'Mất kết nối MQTT...';
+      };
+
+      client.onMessageArrived = (message) => {
+        const data = JSON.parse(message.payloadString);
+        document.getElementById('info').innerHTML = 
+          `<strong>Khoảng cách:</strong> ${data.distance}<br>
+           <strong>Thời gian ước tính:</strong> ${data.duration}`;
+      };
+
+      client.connect({
+        userName: 'TNPhong',
+        password: 'Tranngocphong14@',
+        useSSL: true,
+        onSuccess: () => {
+          console.log('MQTT connected');
+          client.subscribe(mqttTopic);
+        },
+        onFailure: (err) => {
+          console.error('MQTT connection failed:', err);
+          document.getElementById('info').innerHTML = 'Không thể kết nối MQTT';
+        }
+      });
+
+      // Khởi tạo bản đồ Google Maps
+      function initMap() {
+        const pointA = new google.maps.LatLng(10.772763726753627, 106.65115034519333);
+        const pointB = new google.maps.LatLng(10.6059375, 106.8621009);
+
+        const map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 15,
+          center: pointA,
+        });
+
+        const directionsService = new google.maps.DirectionsService();
+        const directionsRenderer = new google.maps.DirectionsRenderer({
+          map: map,
+          suppressMarkers: true
+        });
+
+        new google.maps.Marker({
+          position: pointA,
+          map: map,
+          label: 'A'
+        });
+
+        new google.maps.Marker({
+          position: pointB,
+          map: map,
+          label: 'B'
+        });
+
+        const request = {
+          origin: pointA,
+          destination: pointB,
+          travelMode: google.maps.TravelMode.DRIVING
+        };
+
+        directionsService.route(request, (result, status) => {
+          const infoDiv = document.getElementById('info');
+          if (status === 'OK') {
+            directionsRenderer.setDirections(result);
+          } else {
+            const errorMessages = {
+              'NOT_FOUND': 'Không tìm thấy một trong các điểm được cung cấp.',
+              'ZERO_RESULTS': 'Không thể tìm thấy lộ trình giữa hai điểm.',
+              'INVALID_REQUEST': 'Yêu cầu không hợp lệ.',
+              'OVER_QUERY_LIMIT': 'Vượt quá giới hạn truy vấn API.',
+              'REQUEST_DENIED': 'Yêu cầu bị từ chối bởi API.',
+              'UNKNOWN_ERROR': 'Lỗi không xác định, vui lòng thử lại.'
+            };
+            infoDiv.innerHTML = `Không thể tạo chỉ đường: ${errorMessages[status] || status}`;
+          }
+        });
+      }
+
+      window.onload = initMap;
+    </script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="info">Đang tải lộ trình...</div>
+  </body>
+</html>
